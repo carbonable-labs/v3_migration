@@ -2,6 +2,28 @@
 version = 1
 
 [[package]]
+name = "openzeppelin_access"
+version = "0.19.0"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:0f5055ef443327bb613a56a812ccf31157abfd7d36a18739556f78b67f5b1116"
+dependencies = [
+ "openzeppelin_introspection",
+ "openzeppelin_utils",
+]
+
+[[package]]
+name = "openzeppelin_introspection"
+version = "0.19.0"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:a1dda07a91c447b83ccfcc4895897ec134917f0ff6d2ca876b93ea27466d7693"
+
+[[package]]
+name = "openzeppelin_utils"
+version = "0.19.0"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:0e0e6f6b20b3c4075b92941a2c124430a59f1c207f8fbdfd56ce9239e6d666a8"
+
+[[package]]
 name = "snforge_scarb_plugin"
 version = "0.31.0"
 source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.31.0#72ea785ca354e9e506de3e5d687da9fb2c1b3c67"
@@ -18,5 +40,6 @@ dependencies = [
 name = "v3_migration"
 version = "0.1.0"
 dependencies = [
+ "openzeppelin_access",
  "snforge_std",
 ]
