@@ -1,7 +1,5 @@
 use starknet::ContractAddress;
 
-pub const MULTIPLIER_TONS_TO_MGRAMS: u256 = 1_000_000_000;
-
 #[starknet::interface]
 pub trait IMigration<TContractState> {
     fn migrate_v2(
@@ -9,6 +7,13 @@ pub trait IMigration<TContractState> {
         project_address: ContractAddress,
         amount: u256,
         holder: ContractAddress
+    );
+
+    fn migrate_batch(
+        ref self: TContractState,
+        project_address: ContractAddress,
+        amounts: Span<u256>,
+        holders: Span<ContractAddress>
     );
 }
 
@@ -56,21 +61,32 @@ pub mod MigrationV3 {
             let project = IProjectDispatcher { contract_address: project_address };
             let num_vintages: usize = project.get_num_vintages();
 
-            let mut tokens_ids: Array<u256> = Default::default();
-            let mut values_cc: Array<u256> = Default::default();
-            let mut index = 0;
-            loop {
-                if index >= num_vintages {
-                    break;
-                }
-                values_cc.append(amount.into());
-                let token_id = (index + 1).into();
-                tokens_ids.append(token_id);
-                index += 1;
-            };
+            let mut tokens_ids: Array<u256> = array![];
+            let mut values_cc: Array<u256> = array![];
+            for index in 0
+                ..num_vintages {
+                    values_cc.append(amount.into());
+                    let token_id = (index + 1).into();
+                    tokens_ids.append(token_id);
+                };
 
             // [Interaction] Mint
             project.batch_mint(holder, tokens_ids.span(), values_cc.span());
+        }
+
+        fn migrate_batch(
+            ref self: ContractState,
+            project_address: ContractAddress,
+            amounts: Span<u256>,
+            holders: Span<ContractAddress>
+        ) {
+            assert!(
+                amounts.len() == holders.len(), "amounts and holders must have the same length"
+            );
+            for i in 0
+                ..amounts.len() {
+                    self.migrate_v2(project_address, *amounts[i], *holders[i]);
+                };
         }
     }
 
