@@ -76,3 +76,96 @@ fn test_migrate() {
     assert!(sum_balance + 10 >= cc_amount, "wrong balance");
 }
 
+
+#[test]
+#[fork(url: "https://starknet-sepolia.public.blastapi.io/rpc/v0_7", block_tag: latest)]
+fn test_migrate_twenty() {
+    let owner = contract_address_const::<OWNER_ADDRESS_FELT>();
+    let holder = contract_address_const::<'HOLDER'>();
+    let contract_address = deploy_contract("MigrationV3", array![owner.into()]);
+    let project_address = contract_address_const::<PROJECT_ADDRESS_FELT>();
+    let project = IProjectDispatcher { contract_address: project_address };
+    let migrator = IMigrationDispatcher { contract_address };
+    let cc_amount: u256 = 100_000_000_000;
+
+    start_cheat_caller_address(project_address, owner);
+    project.grant_minter_role(contract_address);
+    stop_cheat_caller_address(project_address);
+
+    start_cheat_caller_address(contract_address, owner);
+    for _ in 0..20_u8 {
+        migrator.migrate_v2(project_address, cc_amount, holder);
+    };
+    stop_cheat_caller_address(contract_address);
+}
+
+#[test]
+#[fork(url: "https://starknet-sepolia.public.blastapi.io/rpc/v0_7", block_tag: latest)]
+fn test_migrate_twenty_batch() {
+    let owner = contract_address_const::<OWNER_ADDRESS_FELT>();
+    let holder = contract_address_const::<'HOLDER'>();
+    let contract_address = deploy_contract("MigrationV3", array![owner.into()]);
+    let project_address = contract_address_const::<PROJECT_ADDRESS_FELT>();
+    let project = IProjectDispatcher { contract_address: project_address };
+    let migrator = IMigrationDispatcher { contract_address };
+    let cc_amount: u256 = 100_000_000_000;
+
+    start_cheat_caller_address(project_address, owner);
+    project.grant_minter_role(contract_address);
+    stop_cheat_caller_address(project_address);
+
+    start_cheat_caller_address(contract_address, owner);
+
+    migrator
+        .migrate_batch(
+            project_address,
+            array![
+                cc_amount + 0,
+                cc_amount + 1,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount,
+                cc_amount
+            ]
+                .span(),
+            array![
+                holder,
+                holder,
+                owner,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder,
+                holder
+            ]
+                .span()
+        );
+
+    stop_cheat_caller_address(contract_address);
+}
