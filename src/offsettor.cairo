@@ -13,6 +13,9 @@ pub trait IOffsettor<TContractState> {
     // Gets the user requests
     fn get_requests(self: @TContractState, user: ContractAddress) -> Array<Request>;
 
+    // Adds a project to the list
+    fn add_project(ref self: TContractState, project_address: ContractAddress);
+
     // Adds a request of the user
     fn request_offset(
         ref self: TContractState, project_address: ContractAddress, amount: u256, vintage: u256,
@@ -53,6 +56,7 @@ pub mod Offsettor {
     struct Storage {
         pub requests: Map<(ContractAddress, u32), Request>,
         pub num_requests: Map<ContractAddress, u32>,
+        pub projects: Map<ContractAddress, bool>,
         #[substorage(v0)]
         pub ownable: OwnableComponent::Storage,
         #[substorage(v0)]
@@ -86,6 +90,11 @@ pub mod Offsettor {
             requests
         }
 
+        fn add_project(ref self: ContractState, project_address: ContractAddress) {
+            self.ownable.assert_only_owner();
+            self.projects.entry(project_address).write(true);
+        }
+
         fn request_offset(
             ref self: ContractState, project_address: ContractAddress, amount: u256, vintage: u256,
         ) {
@@ -93,6 +102,7 @@ pub mod Offsettor {
             let this = get_contract_address();
 
             // assert project in list?
+            assert!(self.projects.entry(project_address).read(), "Project not found");
             let project = IProjectDispatcher { contract_address: project_address };
 
             // Transfer vintage
