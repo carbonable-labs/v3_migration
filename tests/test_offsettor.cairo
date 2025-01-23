@@ -69,5 +69,5 @@ fn test_offset() {
     println!("1filled: {:?}", project.internal_to_cc(*user_requests[1].amount_filled, 2));
     println!("1remaining: {:?}", project.internal_to_cc(*user_requests[1].amount, 2));
     println!("0filled: {:?}", project.internal_to_cc(*user_requests[0].amount_filled, 2));
-    println!("remaining: {:?}", project.internal_to_cc(*user_requests[0].amount, 2));
+    println!("0remaining: {:?}", project.internal_to_cc(*user_requests[0].amount, 2));
 }
