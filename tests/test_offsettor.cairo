@@ -47,6 +47,10 @@ fn test_offset() {
     project.set_approval_for_all(offsettor_address, true);
     stop_cheat_caller_address(project_address);
 
+    start_cheat_caller_address(offsettor_address, owner);
+    offsettor.add_project(project_address);
+    stop_cheat_caller_address(offsettor_address);
+
     start_cheat_caller_address(offsettor_address, holder);
     let balance = project.balance_of(holder, 2);
     offsettor.request_offset(project_address, balance / 2, 2);
@@ -66,8 +70,8 @@ fn test_offset() {
 
     let user_requests = offsettor.get_requests(holder);
     println!("user_requests: {:?}", user_requests);
-    println!("1filled: {:?}", project.internal_to_cc(*user_requests[1].amount_filled, 2));
-    println!("1remaining: {:?}", project.internal_to_cc(*user_requests[1].amount, 2));
-    println!("0filled: {:?}", project.internal_to_cc(*user_requests[0].amount_filled, 2));
-    println!("0remaining: {:?}", project.internal_to_cc(*user_requests[0].amount, 2));
+    println!("req1.filled: {:?}", project.internal_to_cc(*user_requests[1].amount_filled, 2));
+    println!("req1.remaining: {:?}", project.internal_to_cc(*user_requests[1].amount, 2));
+    println!("req0.filled: {:?}", project.internal_to_cc(*user_requests[0].amount_filled, 2));
+    println!("req0.remaining: {:?}", project.internal_to_cc(*user_requests[0].amount, 2));
 }
