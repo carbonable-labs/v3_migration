@@ -1,11 +1,19 @@
 use starknet::ContractAddress;
 
 #[derive(Serde, Drop, Copy, starknet::Store, Debug)]
+pub struct RequestInternal {
+    pub project_address_: ContractAddress,
+    pub vintage_: u256,
+    pub amount_: u256,
+    pub filled_: u256,
+}
+
+#[derive(Serde, Drop, Copy, starknet::Store, Debug)]
 pub struct Request {
     pub project_address: ContractAddress,
-    pub amount: u256,
     pub vintage: u256,
-    pub amount_filled: u256,
+    pub amount: u256,
+    pub filled: u256,
 }
 
 #[starknet::interface]
@@ -38,7 +46,7 @@ pub mod Offsettor {
     use starknet::{get_caller_address, get_contract_address};
     use crate::interfaces::{IProjectDispatcher, IProjectDispatcherTrait};
 
-    use super::Request;
+    use super::{Request, RequestInternal};
 
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_upgrades::upgradeable::UpgradeableComponent;
@@ -54,7 +62,7 @@ pub mod Offsettor {
 
     #[storage]
     struct Storage {
-        pub requests: Map<(ContractAddress, u32), Request>,
+        pub requests: Map<(ContractAddress, u32), RequestInternal>,
         pub num_requests: Map<ContractAddress, u32>,
         pub projects: Map<ContractAddress, bool>,
         #[substorage(v0)]
@@ -84,7 +92,17 @@ pub mod Offsettor {
             let mut requests = array![];
             for i in 0
                 ..num_requests {
-                    let request = self.requests.entry((user, i)).read();
+                    let r = self.requests.entry((user, i)).read();
+                    let vintage = r.vintage_;
+
+                    // Convert internal to cc
+                    let project = IProjectDispatcher { contract_address: r.project_address_ };
+                    let amount = project.internal_to_cc(r.amount_, vintage);
+                    let filled = project.internal_to_cc(r.filled_, vintage);
+
+                    let request = Request {
+                        project_address: r.project_address_, vintage, amount, filled,
+                    };
                     requests.append(request);
                 };
             requests
@@ -110,14 +128,17 @@ pub mod Offsettor {
 
             // Add requests
             let internal_cc = project.cc_to_internal(amount, vintage);
-            let request = Request {
-                project_address, amount: internal_cc, vintage, amount_filled: 0,
+            let r = RequestInternal {
+                project_address_: project_address,
+                amount_: internal_cc,
+                vintage_: vintage,
+                filled_: 0,
             };
             let num_requests = self.num_requests.entry(caller).read();
             let new_num_requests = num_requests + 1;
             self.num_requests.entry(caller).write(new_num_requests);
 
-            self.requests.entry((caller, num_requests)).write(request);
+            self.requests.entry((caller, num_requests)).write(r);
         }
 
         fn claim_offset(
@@ -125,26 +146,25 @@ pub mod Offsettor {
         ) {
             self.ownable.assert_only_owner();
             let this = get_contract_address();
-            let request = self.requests.entry((user, request_number)).read();
-            let project = IProjectDispatcher { contract_address: request.project_address };
+            let r = self.requests.entry((user, request_number)).read();
+            let project = IProjectDispatcher { contract_address: r.project_address_ };
 
-            let internal_cc_burned = project.cc_to_internal(amount, request.vintage);
-            let new_amount_filled = request.amount_filled + internal_cc_burned;
-            let new_amount = request.amount - internal_cc_burned;
+            let internal_cc_burned = project.cc_to_internal(amount, r.vintage_);
+            let new_filled = r.filled_ + internal_cc_burned;
+            let new_amount = r.amount_ - internal_cc_burned;
 
             // burn amount
             project
                 .safe_transfer_from(
-                    this, 0xdead.try_into().unwrap(), request.vintage, amount, array![].span()
+                    this, 0xdead.try_into().unwrap(), r.vintage_, amount, array![].span()
                 );
 
             // update request
-            let request = self.requests.entry((user, request_number)).read();
-            let new_request = Request {
-                project_address: request.project_address,
-                amount: new_amount,
-                vintage: request.vintage,
-                amount_filled: new_amount_filled
+            let new_request = RequestInternal {
+                project_address_: r.project_address_,
+                amount_: new_amount,
+                vintage_: r.vintage_,
+                filled_: new_filled
             };
             self.requests.entry((user, request_number)).write(new_request);
         }

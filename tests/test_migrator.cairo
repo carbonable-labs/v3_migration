@@ -60,7 +60,7 @@ fn test_migrate() {
     stop_cheat_caller_address(project_address);
 
     start_cheat_caller_address(contract_address, owner);
-    migrator.migrate_v2(project_address, cc_amount, holder);
+    migrator.migrate(project_address, cc_amount, holder);
     stop_cheat_caller_address(contract_address);
 
     // start_cheat_caller_address(project_address, holder);
@@ -94,7 +94,7 @@ fn test_migrate_twenty() {
 
     start_cheat_caller_address(contract_address, owner);
     for _ in 0..20_u8 {
-        migrator.migrate_v2(project_address, cc_amount, holder);
+        migrator.migrate(project_address, cc_amount, holder);
     };
     stop_cheat_caller_address(contract_address);
 }

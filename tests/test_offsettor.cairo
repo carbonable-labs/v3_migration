@@ -40,7 +40,7 @@ fn test_offset() {
     stop_cheat_caller_address(project_address);
 
     start_cheat_caller_address(migrator_address, owner);
-    migrator.migrate_v2(project_address, cc_amount, holder);
+    migrator.migrate(project_address, cc_amount, holder);
     stop_cheat_caller_address(migrator_address);
 
     start_cheat_caller_address(project_address, holder);
@@ -69,9 +69,9 @@ fn test_offset() {
     stop_cheat_caller_address(offsettor_address);
 
     let user_requests = offsettor.get_requests(holder);
+    let total_filled = *user_requests[1].filled + *user_requests[0].filled;
+    let total_remaining = *user_requests[1].amount + *user_requests[0].amount;
     println!("user_requests: {:?}", user_requests);
-    println!("req1.filled: {:?}", project.internal_to_cc(*user_requests[1].amount_filled, 2));
-    println!("req1.remaining: {:?}", project.internal_to_cc(*user_requests[1].amount, 2));
-    println!("req0.filled: {:?}", project.internal_to_cc(*user_requests[0].amount_filled, 2));
-    println!("req0.remaining: {:?}", project.internal_to_cc(*user_requests[0].amount, 2));
+    println!("total filled: {:?}", total_filled);
+    println!("total remaining: {:?}", total_remaining);
 }
