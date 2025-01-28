@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IMigration<TContractState> {
-    fn migrate_v2(
+    fn migrate(
         ref self: TContractState,
         project_address: ContractAddress,
         amount: u256,
@@ -51,7 +51,7 @@ pub mod MigrationV3 {
 
     #[abi(embed_v0)]
     impl MigationImpl of super::IMigration<ContractState> {
-        fn migrate_v2(
+        fn migrate(
             ref self: ContractState,
             project_address: ContractAddress,
             amount: u256,
@@ -83,10 +83,9 @@ pub mod MigrationV3 {
             assert!(
                 amounts.len() == holders.len(), "amounts and holders must have the same length"
             );
-            for i in 0
-                ..amounts.len() {
-                    self.migrate_v2(project_address, *amounts[i], *holders[i]);
-                };
+            for i in 0..amounts.len() {
+                self.migrate(project_address, *amounts[i], *holders[i]);
+            };
         }
     }
 
