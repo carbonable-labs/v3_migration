@@ -6,6 +6,7 @@ pub struct RequestInternal {
     pub vintage_: u256,
     pub amount_: u256,
     pub filled_: u256,
+    pub tx_hash_: u256,
 }
 
 #[derive(Serde, Drop, Copy, starknet::Store, Debug)]
@@ -14,6 +15,7 @@ pub struct Request {
     pub vintage: u256,
     pub amount: u256,
     pub filled: u256,
+    pub tx_hash: u256,
 }
 
 #[starknet::interface]
@@ -43,7 +45,7 @@ pub mod Offsettor {
     use starknet::storage::{
         Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
     };
-    use starknet::{get_caller_address, get_contract_address};
+    use starknet::{get_caller_address, get_contract_address, get_tx_info};
     use crate::interfaces::{IProjectDispatcher, IProjectDispatcherTrait};
 
     use super::{Request, RequestInternal};
@@ -101,7 +103,11 @@ pub mod Offsettor {
                     let filled = project.internal_to_cc(r.filled_, vintage);
 
                     let request = Request {
-                        project_address: r.project_address_, vintage, amount, filled,
+                        project_address: r.project_address_,
+                        vintage,
+                        amount,
+                        filled,
+                        tx_hash: r.tx_hash_
                     };
                     requests.append(request);
                 };
@@ -118,6 +124,7 @@ pub mod Offsettor {
         ) {
             let caller = get_caller_address();
             let this = get_contract_address();
+            let tx_info = get_tx_info().unbox();
 
             // assert project in list?
             assert!(self.projects.entry(project_address).read(), "Project not found");
@@ -133,6 +140,7 @@ pub mod Offsettor {
                 amount_: internal_cc,
                 vintage_: vintage,
                 filled_: 0,
+                tx_hash_: tx_info.transaction_hash.into(),
             };
             let num_requests = self.num_requests.entry(caller).read();
             let new_num_requests = num_requests + 1;
@@ -164,7 +172,8 @@ pub mod Offsettor {
                 project_address_: r.project_address_,
                 amount_: new_amount,
                 vintage_: r.vintage_,
-                filled_: new_filled
+                filled_: new_filled,
+                tx_hash_: r.tx_hash_,
             };
             self.requests.entry((user, request_number)).write(new_request);
         }
