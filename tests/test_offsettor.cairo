@@ -140,3 +140,57 @@ fn test_with_rebase() {
     );
     assert!(*user_requests[0].amount == 0 && amount / 2 - *user_requests[0].filled < 10);
 }
+
+
+#[test]
+#[fork(url: "https://starknet-sepolia.public.blastapi.io/rpc/v0_7", block_tag: latest)]
+fn test_pending_requests() {
+    let owner = contract_address_const::<OWNER_ADDRESS_FELT>();
+    let holder = contract_address_const::<'HOLDER'>();
+    let migrator_address = deploy_contract("MigrationV3", array![owner.into()]);
+    let offsettor_address = deploy_contract("Offsettor", array![owner.into()]);
+    let project_address = contract_address_const::<PROJECT_ADDRESS_FELT>();
+
+    let project = IProjectDispatcher { contract_address: project_address };
+    let migrator = IMigrationDispatcher { contract_address: migrator_address };
+    let offsettor = IOffsettorDispatcher { contract_address: offsettor_address };
+
+    let cc_amount: u256 = 100_000_000_000;
+
+    start_cheat_caller_address(project_address, owner);
+    project.grant_minter_role(migrator_address);
+    project.set_approval_for_all(offsettor_address, true);
+    stop_cheat_caller_address(project_address);
+
+    start_cheat_caller_address(migrator_address, owner);
+    migrator.migrate(project_address, cc_amount, holder);
+    migrator.migrate(project_address, cc_amount, owner);
+    stop_cheat_caller_address(migrator_address);
+
+    let balance = project.balance_of(holder, 2);
+    let amount = (balance / 1_000_000) * 1_000_000;
+
+    start_cheat_caller_address(project_address, holder);
+    project.set_approval_for_all(offsettor_address, true);
+    stop_cheat_caller_address(project_address);
+
+    start_cheat_caller_address(offsettor_address, owner);
+    offsettor.add_project(project_address);
+    offsettor.request_offset(project_address, amount / 2, 2);
+    offsettor.request_offset(project_address, amount / 4, 2);
+    offsettor.request_offset(project_address, amount / 8, 2);
+    stop_cheat_caller_address(offsettor_address);
+
+    start_cheat_caller_address(offsettor_address, holder);
+    offsettor.request_offset(project_address, amount / 2, 2);
+    offsettor.request_offset(project_address, amount / 2, 2);
+    stop_cheat_caller_address(offsettor_address);
+
+    start_cheat_caller_address(offsettor_address, owner);
+    offsettor.request_offset(project_address, amount / 16, 2);
+    stop_cheat_caller_address(project_address);
+
+    let pending_requests = offsettor.get_pending_requests();
+    println!("pending_requests: {:?}", pending_requests);
+    assert!(pending_requests.len() == 6);
+}
