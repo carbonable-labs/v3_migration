@@ -176,21 +176,32 @@ fn test_pending_requests() {
 
     start_cheat_caller_address(offsettor_address, owner);
     offsettor.add_project(project_address);
-    offsettor.request_offset(project_address, amount / 2, 2);
-    offsettor.request_offset(project_address, amount / 4, 2);
-    offsettor.request_offset(project_address, amount / 8, 2);
+    offsettor.request_offset(project_address, amount / 2, 2); // #0
+    offsettor.request_offset(project_address, amount / 4, 2); // #1
+    offsettor.request_offset(project_address, amount / 8, 2); // #2
     stop_cheat_caller_address(offsettor_address);
 
     start_cheat_caller_address(offsettor_address, holder);
-    offsettor.request_offset(project_address, amount / 2, 2);
-    offsettor.request_offset(project_address, amount / 2, 2);
+    offsettor.request_offset(project_address, amount / 2, 2); // #3
+    offsettor.request_offset(project_address, amount / 2, 2); // #4
     stop_cheat_caller_address(offsettor_address);
 
     start_cheat_caller_address(offsettor_address, owner);
-    offsettor.request_offset(project_address, amount / 16, 2);
+    offsettor.request_offset(project_address, amount / 16, 2); // #5
     stop_cheat_caller_address(project_address);
 
     let pending_requests = offsettor.get_pending_requests(0, 100);
     println!("pending_requests: {:?}", pending_requests);
     assert!(pending_requests.len() == 6);
+
+    start_cheat_caller_address(offsettor_address, owner);
+    offsettor.claim_offset(holder, 0, amount / 2);
+    offsettor.claim_offset(holder, 1, amount / 4);
+    offsettor.claim_offset(holder, 2, amount / 8);
+    offsettor.claim_offset(owner, 3, amount / 3);
+    stop_cheat_caller_address(offsettor_address);
+
+    let pending_requests = offsettor.get_pending_requests(0, 100);
+    println!("pending_requests: {:?}", pending_requests);
+    assert!(pending_requests.len() == 3);
 }
