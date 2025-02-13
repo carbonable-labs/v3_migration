@@ -8,6 +8,8 @@ pub struct RequestInternal {
     pub filled_: u256,
     pub tx_hash_: u256,
     pub timestamp_: u64,
+    pub user_: ContractAddress,
+    pub request_id_: u32,
 }
 
 #[derive(Serde, Drop, Copy, starknet::Store, Debug)]
@@ -18,6 +20,7 @@ pub struct Request {
     pub filled: u256,
     pub tx_hash: u256,
     pub timestamp: u64,
+    pub user: ContractAddress,
 }
 
 #[starknet::interface]
@@ -26,7 +29,7 @@ pub trait IOffsettor<TContractState> {
     fn get_requests(self: @TContractState, user: ContractAddress) -> Array<Request>;
 
     // Gets all user requests with remaining amount to be filled
-    fn get_pending_requests(self: @TContractState) -> Array<Request>;
+    fn get_pending_requests(self: @TContractState, start: u32, end: u32) -> Array<Request>;
 
     // Adds a project to the list
     fn add_project(ref self: TContractState, project_address: ContractAddress);
@@ -69,10 +72,10 @@ pub mod Offsettor {
 
     #[storage]
     struct Storage {
-        pub requests: Map<(ContractAddress, u32), RequestInternal>,
-        pub num_requests: Map<ContractAddress, u32>,
-        pub depositors: Map<u32, ContractAddress>,
-        pub num_depositors: u32,
+        pub requests: Map<u32, RequestInternal>,
+        pub requests_len: u32,
+        pub user_requests: Map<(ContractAddress, u32), u32>,
+        pub user_requests_len: Map<ContractAddress, u32>,
         pub projects: Map<ContractAddress, bool>,
         #[substorage(v0)]
         pub ownable: OwnableComponent::Storage,
@@ -96,44 +99,42 @@ pub mod Offsettor {
 
     #[abi(embed_v0)]
     impl OffsettorImpl of super::IOffsettor<ContractState> {
-        fn get_pending_requests(self: @ContractState) -> Array<Request> {
+        fn get_pending_requests(self: @ContractState, start: u32, end: u32) -> Array<Request> {
             let mut requests = array![];
-            for depositor_index in 0
-                ..self
-                    .num_depositors
-                    .read() {
-                        let user = self.depositors.entry(depositor_index).read();
-                        let num_requests = self.num_requests.entry(user).read();
-                        for i in 0
-                            ..num_requests {
-                                let r = self.requests.entry((user, i)).read();
-                                let project = IProjectDispatcher {
-                                    contract_address: r.project_address_
-                                };
-                                let amount = project.internal_to_cc(r.amount_, r.vintage_);
-                                let filled = project.internal_to_cc(r.filled_, r.vintage_);
-                                if amount - filled > 10_000 {
-                                    let request = Request {
-                                        project_address: r.project_address_,
-                                        vintage: r.vintage_,
-                                        amount,
-                                        filled,
-                                        tx_hash: r.tx_hash_,
-                                        timestamp: r.timestamp_,
-                                    };
-                                    requests.append(request);
-                                }
+            let len = self.requests_len.read();
+            let start = core::cmp::max(0, start);
+            let end = core::cmp::min(len, end);
+            for request_id in start
+                ..end {
+                    {
+                        let r = self.requests.entry(request_id).read();
+                        let project = IProjectDispatcher { contract_address: r.project_address_ };
+                        let amount = project.internal_to_cc(r.amount_, r.vintage_);
+                        let filled = project.internal_to_cc(r.filled_, r.vintage_);
+                        if amount > 10_000 {
+                            let request = Request {
+                                project_address: r.project_address_,
+                                vintage: r.vintage_,
+                                amount,
+                                filled,
+                                tx_hash: r.tx_hash_,
+                                timestamp: r.timestamp_,
+                                user: r.user_,
                             };
+                            requests.append(request);
+                        }
                     };
+                };
             requests
         }
 
         fn get_requests(self: @ContractState, user: ContractAddress) -> Array<Request> {
-            let num_requests = self.num_requests.entry(user).read();
+            let num_user_requests = self.user_requests_len.entry(user).read();
             let mut requests = array![];
             for i in 0
-                ..num_requests {
-                    let r = self.requests.entry((user, i)).read();
+                ..num_user_requests {
+                    let request_id = self.user_requests.entry((user, i)).read();
+                    let r = self.requests.entry(request_id).read();
                     let vintage = r.vintage_;
 
                     // Convert internal to cc
@@ -148,6 +149,7 @@ pub mod Offsettor {
                         filled,
                         tx_hash: r.tx_hash_,
                         timestamp: r.timestamp_,
+                        user: r.user_,
                     };
                     requests.append(request);
                 };
@@ -173,7 +175,10 @@ pub mod Offsettor {
             // Transfer vintage
             project.safe_transfer_from(caller, this, vintage, amount, array![].span());
 
-            // Add requests
+            // Create requests
+            let request_id = self.requests_len.read();
+            let new_requests_len = request_id + 1;
+
             let internal_cc = project.cc_to_internal(amount, vintage);
             let r = RequestInternal {
                 project_address_: project_address,
@@ -182,18 +187,17 @@ pub mod Offsettor {
                 filled_: 0,
                 tx_hash_: tx_info.transaction_hash.into(),
                 timestamp_: get_block_timestamp(),
+                user_: caller,
+                request_id_: request_id,
             };
-            let num_requests = self.num_requests.entry(caller).read();
-            let new_num_requests = num_requests + 1;
-            self.num_requests.entry(caller).write(new_num_requests);
 
-            // Add depositor if first request
-            if num_requests == 0 {
-                self.depositors.entry(self.num_depositors.read()).write(caller);
-                self.num_depositors.write(self.num_depositors.read() + 1);
-            }
+            // add request
+            self.requests_len.write(new_requests_len);
+            let num_user_requests = self.user_requests_len.entry(caller).read();
+            self.user_requests.entry((caller, num_user_requests)).write(request_id);
+            self.user_requests_len.entry(caller).write(num_user_requests + 1);
 
-            self.requests.entry((caller, num_requests)).write(r);
+            self.requests.entry(request_id).write(r);
         }
 
         fn claim_offset(
@@ -201,10 +205,11 @@ pub mod Offsettor {
         ) {
             self.ownable.assert_only_owner();
             let this = get_contract_address();
-            let r = self.requests.entry((user, request_number)).read();
+            let r = self.requests.entry(request_number).read();
             let project = IProjectDispatcher { contract_address: r.project_address_ };
 
             let internal_cc_burned = project.cc_to_internal(amount, r.vintage_);
+            assert!(r.amount_ >= internal_cc_burned, "Burned amount too high");
             let new_filled = r.filled_ + internal_cc_burned;
             let new_amount = r.amount_ - internal_cc_burned;
 
@@ -222,8 +227,10 @@ pub mod Offsettor {
                 filled_: new_filled,
                 tx_hash_: r.tx_hash_,
                 timestamp_: r.timestamp_,
+                user_: r.user_,
+                request_id_: r.request_id_,
             };
-            self.requests.entry((user, request_number)).write(new_request);
+            self.requests.entry(request_number).write(new_request);
         }
     }
 
@@ -232,7 +239,6 @@ pub mod Offsettor {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.ownable.assert_only_owner();
 
-            // Replace the class hash upgrading the contract
             self.upgradeable.upgrade(new_class_hash);
         }
     }
