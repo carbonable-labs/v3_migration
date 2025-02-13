@@ -190,7 +190,7 @@ fn test_pending_requests() {
     offsettor.request_offset(project_address, amount / 16, 2);
     stop_cheat_caller_address(project_address);
 
-    let pending_requests = offsettor.get_pending_requests();
+    let pending_requests = offsettor.get_pending_requests(0, 100);
     println!("pending_requests: {:?}", pending_requests);
     assert!(pending_requests.len() == 6);
 }
